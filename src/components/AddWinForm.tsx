@@ -3,15 +3,51 @@ import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
-export function AddWinForm() {
+interface AddWinFormProps {
+  onWinAdded?: () => void;
+}
+
+export function AddWinForm({ onWinAdded }: AddWinFormProps) {
   const [winText, setWinText] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { user } = useAuth();
+  const { toast } = useToast();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (winText.trim()) {
-      console.log("New win added:", winText);
+    if (!winText.trim() || !user) return;
+
+    setIsSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from('wins')
+        .insert([
+          {
+            message: winText.trim(),
+            user_id: user.id
+          }
+        ]);
+
+      if (error) throw error;
+
       setWinText("");
+      toast({
+        title: "Win added! 🎉",
+        description: "Your victory has been recorded.",
+      });
+      onWinAdded?.();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to add your win. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -35,10 +71,10 @@ export function AddWinForm() {
           <Button 
             type="submit" 
             className="w-full bg-gradient-primary hover:opacity-90 border-none"
-            disabled={!winText.trim()}
+            disabled={!winText.trim() || !user || isSubmitting}
           >
             <Plus className="w-4 h-4 mr-2" />
-            Add Your Win
+            {isSubmitting ? "Adding..." : "Add Your Win"}
           </Button>
         </form>
       </CardContent>

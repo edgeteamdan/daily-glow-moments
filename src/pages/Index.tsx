@@ -4,43 +4,47 @@ import { Button } from "@/components/ui/button";
 import { WinCard } from "@/components/WinCard";
 import { AddWinForm } from "@/components/AddWinForm";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { useState, useEffect } from "react";
+import { formatDistanceToNow } from "date-fns";
 
-// Sample wins data - will be replaced with real data later
-const sampleWins = [
-  {
-    id: 1,
-    text: "Finished a tough workout and felt amazing afterwards",
-    date: "Today, 8:30 AM"
-  },
-  {
-    id: 2,
-    text: "Had a great conversation with a friend I hadn't talked to in months",
-    date: "Yesterday, 2:15 PM"
-  },
-  {
-    id: 3,
-    text: "Finally organized my workspace and it looks fantastic",
-    date: "Yesterday, 11:00 AM"
-  },
-  {
-    id: 4,
-    text: "Tried a new recipe and it turned out delicious",
-    date: "2 days ago, 7:30 PM"
-  },
-  {
-    id: 5,
-    text: "Got a compliment from my boss on the project I submitted",
-    date: "3 days ago, 3:45 PM"
-  },
-  {
-    id: 6,
-    text: "Helped a stranger with directions and made their day better",
-    date: "3 days ago, 12:20 PM"
-  }
-];
+interface Win {
+  id: string;
+  message: string;
+  created_at: string;
+}
 
 const Index = () => {
   const { user, loading, signOut } = useAuth();
+  const [wins, setWins] = useState<Win[]>([]);
+  const [winsLoading, setWinsLoading] = useState(true);
+
+  const fetchWins = async () => {
+    if (!user) {
+      setWins([]);
+      setWinsLoading(false);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('wins')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setWins(data || []);
+    } catch (error) {
+      console.error('Error fetching wins:', error);
+    } finally {
+      setWinsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchWins();
+  }, [user]);
 
   if (loading) {
     return (
@@ -105,30 +109,62 @@ const Index = () => {
       {/* Main Content */}
       <div className="container mx-auto px-4 py-8 max-w-4xl">
         {/* Add Win Form */}
-        <div className="mb-8">
-          <AddWinForm />
-        </div>
+        {user && (
+          <div className="mb-8">
+            <AddWinForm onWinAdded={fetchWins} />
+          </div>
+        )}
 
         {/* Wins List */}
         <div className="space-y-6">
           <div className="text-center mb-6">
             <h2 className="text-2xl font-semibold text-foreground mb-2">
-              Recent Wins
+              {user ? "Your Recent Wins" : "Recent Wins"}
             </h2>
             <p className="text-muted-foreground">
-              Keep the momentum going! Here are some recent victories to celebrate 🎉
+              {user 
+                ? "Keep the momentum going! Here are your recent victories to celebrate 🎉"
+                : "Sign in to start tracking your daily wins!"
+              }
             </p>
           </div>
 
-          <div className="grid gap-4">
-            {sampleWins.map((win) => (
-              <WinCard
-                key={win.id}
-                win={win.text}
-                date={win.date}
-              />
-            ))}
-          </div>
+          {user ? (
+            winsLoading ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                <p className="text-muted-foreground">Loading your wins...</p>
+              </div>
+            ) : wins.length > 0 ? (
+              <div className="grid gap-4">
+                {wins.map((win) => (
+                  <WinCard
+                    key={win.id}
+                    win={win.message}
+                    date={formatDistanceToNow(new Date(win.created_at), { addSuffix: true })}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground">
+                  No wins yet! Add your first victory above ✨
+                </p>
+              </div>
+            )
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground mb-4">
+                Sign in with Google to start tracking your daily wins!
+              </p>
+              <Button asChild variant="outline">
+                <Link to="/auth">
+                  <LogIn className="w-4 h-4 mr-2" />
+                  Get Started
+                </Link>
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Motivational Footer */}
